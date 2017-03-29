@@ -18,6 +18,7 @@
 
 const m = require('mochainon');
 const path = require('path');
+const StreamReadable = require('stream').Readable;
 const DATA_PATH = path.join(__dirname, 'data');
 const utils = require('../../lib/image-stream/utils');
 
@@ -48,6 +49,62 @@ describe('ImageStream: Utils', function() {
     it('should return application/octet-stream for an uncompress image', function() {
       const file = path.join(DATA_PATH, 'images', 'raspberrypi.img');
       m.chai.expect(utils.getArchiveMimeType(file)).to.equal('application/octet-stream');
+    });
+
+  });
+
+  describe('.extractStream()', function() {
+
+    describe('given a stream that emits data', function() {
+
+      beforeEach(function() {
+        this.stream = new StreamReadable();
+
+        /* eslint-disable no-underscore-dangle */
+
+        this.stream._read = function() {
+
+        /* eslint-enable no-underscore-dangle */
+
+          this.push(Buffer.from('Hello', 'utf8'));
+          this.push(Buffer.from(' ', 'utf8'));
+          this.push(Buffer.from('World', 'utf8'));
+          this.push(null);
+        };
+      });
+
+      it('should yield the stream data', function(done) {
+        utils.extractStream(this.stream).then((data) => {
+          m.chai.expect(data.toString()).to.equal('Hello World');
+          done();
+        }).catch(done);
+      });
+
+    });
+
+    describe('given a stream that throws an error', function() {
+
+      beforeEach(function() {
+        this.stream = new StreamReadable();
+
+        /* eslint-disable no-underscore-dangle */
+
+        this.stream._read = function() {
+
+        /* eslint-enable no-underscore-dangle */
+
+          this.emit('error', new Error('stream error'));
+        };
+      });
+
+      it('should be rejected with the error', function(done) {
+        utils.extractStream(this.stream).catch((error) => {
+          m.chai.expect(error).to.be.an.instanceof(Error);
+          m.chai.expect(error.message).to.equal('stream error');
+          done();
+        });
+      });
+
     });
 
   });
